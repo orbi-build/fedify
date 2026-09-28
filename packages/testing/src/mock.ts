@@ -273,6 +273,7 @@ class MockFederation<TContextData> implements Federation<TContextData> {
   private webFingerDispatcher?: any;
   public actorDispatchers: Map<string, any> = new Map();
   public actorKeyPairsDispatcher?: any;
+  public actorAliases: Map<string, string> = new Map();
   public actorPath?: string;
   public inboxPath?: string;
   public outboxPath?: string;
@@ -350,12 +351,37 @@ class MockFederation<TContextData> implements Federation<TContextData> {
     const setters: any = {
       setKeyPairsDispatcher: (keyPairsDispatcher: any) => {
         this.actorKeyPairsDispatcher = keyPairsDispatcher;
-        return this as any;
+        return setters;
       },
-      mapHandle: () => this as any,
-      mapAlias: () => this as any,
+      mapHandle: () => setters,
+      mapAlias: () => setters,
       mapPortableActorId: () => setters,
-      authorize: () => this as any,
+      mapActorAlias: (aliasPath: string, identifier: string) => {
+        if (identifier === "") {
+          throw new TypeError("Identifier cannot be empty.");
+        }
+        if (this.actorAliases.has(identifier)) {
+          throw new TypeError(
+            `Actor alias for ${JSON.stringify(identifier)} already set.`,
+          );
+        }
+        if (/\{[^}]*\}/.test(aliasPath)) {
+          throw new TypeError(
+            "Path for actor alias must have no variables.",
+          );
+        }
+        for (const [other, otherPath] of this.actorAliases) {
+          if (otherPath === aliasPath) {
+            throw new TypeError(
+              `Actor alias path ${JSON.stringify(aliasPath)} conflicts with ` +
+                `existing route ${JSON.stringify(`actorAlias:${other}`)}.`,
+            );
+          }
+        }
+        this.actorAliases.set(identifier, aliasPath);
+        return setters;
+      },
+      authorize: () => setters,
     };
     return setters;
   }
@@ -363,20 +389,22 @@ class MockFederation<TContextData> implements Federation<TContextData> {
   setObjectDispatcher(cls: any, path: string, dispatcher: any): any {
     this.objectDispatchers.set(path, dispatcher);
     this.objectPaths.set(cls.typeId.href, path);
-    return {
-      authorize: () => this as any,
+    const setters: any = {
+      authorize: () => setters,
     };
+    return setters;
   }
 
   setInboxDispatcher(_path: any, dispatcher: any): any {
     this.inboxDispatcher = dispatcher;
     // Note: inboxPath is set in setInboxListeners
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
-      authorize: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
+      authorize: () => setters,
     };
+    return setters;
   }
 
   setOutboxDispatcher(path: any, dispatcher: any): any {
@@ -386,70 +414,76 @@ class MockFederation<TContextData> implements Federation<TContextData> {
     );
     this.outboxDispatcher = dispatcher;
     this.outboxPath = path;
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
       authorize: (predicate: any) => {
         this.outboxDispatcherAuthorizePredicate = predicate;
-        return this as any;
+        return setters;
       },
     };
+    return setters;
   }
 
   setFollowingDispatcher(path: any, dispatcher: any): any {
     this.followingDispatcher = dispatcher;
     this.followingPath = path;
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
-      authorize: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
+      authorize: () => setters,
     };
+    return setters;
   }
 
   setFollowersDispatcher(path: any, dispatcher: any): any {
     this.followersDispatcher = dispatcher;
     this.followersPath = path;
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
-      authorize: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
+      authorize: () => setters,
     };
+    return setters;
   }
 
   setLikedDispatcher(path: any, dispatcher: any): any {
     this.likedDispatcher = dispatcher;
     this.likedPath = path;
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
-      authorize: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
+      authorize: () => setters,
     };
+    return setters;
   }
 
   setFeaturedDispatcher(path: any, dispatcher: any): any {
     this.featuredDispatcher = dispatcher;
     this.featuredPath = path;
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
-      authorize: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
+      authorize: () => setters,
     };
+    return setters;
   }
 
   setFeaturedTagsDispatcher(path: any, dispatcher: any): any {
     this.featuredTagsDispatcher = dispatcher;
     this.featuredTagsPath = path;
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
-      authorize: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
+      authorize: () => setters,
     };
+    return setters;
   }
 
   setInboxListeners(inboxPath: any, sharedInboxPath?: string): any {
@@ -788,12 +822,13 @@ class MockFederation<TContextData> implements Federation<TContextData> {
     _dispatcher: any,
   ): any {
     // Mock implementation - just return a mock callback setters object
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
-      authorize: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
+      authorize: () => setters,
     };
+    return setters;
   }
 
   setOrderedCollectionDispatcher<
@@ -806,12 +841,13 @@ class MockFederation<TContextData> implements Federation<TContextData> {
     _dispatcher: any,
   ): any {
     // Mock implementation - just return a mock callback setters object
-    return {
-      setCounter: () => this as any,
-      setFirstCursor: () => this as any,
-      setLastCursor: () => this as any,
-      authorize: () => this as any,
+    const setters: any = {
+      setCounter: () => setters,
+      setFirstCursor: () => setters,
+      setLastCursor: () => setters,
+      authorize: () => setters,
     };
+    return setters;
   }
 }
 

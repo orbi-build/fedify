@@ -10,7 +10,12 @@ import {
   Note,
   Person,
 } from "@fedify/vocab";
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+  assertThrows,
+} from "@std/assert";
 import {
   rsaPrivateKey3,
   rsaPublicKey3,
@@ -1714,6 +1719,161 @@ test("MockFederation actor setters chain from mapPortableActorId()", () => {
       .actorKeyPairsDispatcher,
     keyPairsDispatcher,
   );
+});
+
+test("MockFederation actor setters return the setters object in any order", () => {
+  // Every method returns the same setters object, so any order chains.
+  const first = createFederation<void>();
+  const setters = first.setActorDispatcher("/users/{identifier}", () => null);
+  assertStrictEquals(setters.setKeyPairsDispatcher(() => []), setters);
+  assertStrictEquals(setters.mapHandle(() => "alice"), setters);
+  assertStrictEquals(
+    setters.mapAlias(() => ({ identifier: "alice" })),
+    setters,
+  );
+  assertStrictEquals(setters.mapPortableActorId(() => null), setters);
+  assertStrictEquals(setters.mapActorAlias("/bot", "bot"), setters);
+  assertStrictEquals(setters.authorize(() => true), setters);
+
+  // A different order also chains without a "not a function" error.
+  const second = createFederation<void>();
+  second
+    .setActorDispatcher("/users/{identifier}", () => null)
+    .authorize(() => true)
+    .mapActorAlias("/relay", "relay")
+    .mapPortableActorId(() => null)
+    .mapAlias(() => ({ identifier: "alice" }))
+    .mapHandle(() => "alice")
+    .setKeyPairsDispatcher(() => []);
+});
+
+test("MockFederation mapActorAlias() validates and records aliases", () => {
+  const federation = createFederation<void>();
+  const setters = federation.setActorDispatcher(
+    "/users/{identifier}",
+    () => null,
+  );
+  assertThrows(
+    () => setters.mapActorAlias("/actor", ""),
+    TypeError,
+    "Identifier cannot be empty.",
+  );
+  assertThrows(
+    () => setters.mapActorAlias("/actor/{id}", "instance"),
+    TypeError,
+    "Path for actor alias must have no variables.",
+  );
+  assertStrictEquals(setters.mapActorAlias("/actor", "instance"), setters);
+  assertEquals(
+    (federation as unknown as { actorAliases: Map<string, string> })
+      .actorAliases.get("instance"),
+    "/actor",
+  );
+  assertThrows(
+    () => setters.mapActorAlias("/bot", "instance"),
+    TypeError,
+    'Actor alias for "instance" already set.',
+  );
+  assertThrows(
+    () => setters.mapActorAlias("/actor", "bot"),
+    TypeError,
+    'Actor alias path "/actor" conflicts with existing route ' +
+      '"actorAlias:instance".',
+  );
+});
+
+test("MockFederation object and collection setters chain authorize()", () => {
+  const federation = createFederation<void>();
+  const objectSetters = federation.setObjectDispatcher(
+    Note,
+    "/notes/{id}",
+    () => null,
+  );
+  assertStrictEquals(objectSetters.authorize(() => true), objectSetters);
+
+  const collectionSetters = [
+    federation.setInboxDispatcher("/users/{identifier}/inbox", () => null),
+    federation.setOutboxDispatcher("/users/{identifier}/outbox", () => null),
+    federation.setFollowingDispatcher(
+      "/users/{identifier}/following",
+      () => null,
+    ),
+    federation.setFollowersDispatcher(
+      "/users/{identifier}/followers",
+      () => null,
+    ),
+    federation.setLikedDispatcher("/users/{identifier}/liked", () => null),
+    federation.setFeaturedDispatcher(
+      "/users/{identifier}/featured",
+      () => null,
+    ),
+    federation.setFeaturedTagsDispatcher(
+      "/users/{identifier}/tags",
+      () => null,
+    ),
+    federation.setCollectionDispatcher(
+      "collection",
+      Note,
+      "/collections/{id}",
+      () => null,
+    ),
+    federation.setOrderedCollectionDispatcher(
+      "orderedCollection",
+      Note,
+      "/ordered-collections/{id}",
+      () => null,
+    ),
+  ];
+  for (const setters of collectionSetters) {
+    assertStrictEquals(setters.authorize(() => true), setters);
+    assertStrictEquals(setters.setCounter(() => 0), setters);
+    assertStrictEquals(setters.setFirstCursor(() => null), setters);
+    assertStrictEquals(setters.setLastCursor(() => null), setters);
+  }
+});
+
+test("MockFederation chained actor setters keep registering callbacks", async () => {
+  const federation = createFederation<void>();
+  let dispatchedIdentifier: string | null = null;
+  let keyPairsCalled = false;
+  federation
+    .setActorDispatcher("/users/{identifier}", (ctx, identifier) => {
+      dispatchedIdentifier = identifier;
+      return new Person({ id: ctx.getActorUri(identifier) });
+    })
+    .mapHandle(() => "alice")
+    .mapAlias(() => ({ identifier: "alice" }))
+    .authorize(() => true)
+    .setKeyPairsDispatcher(() => {
+      keyPairsCalled = true;
+      return [];
+    });
+
+  const context = federation.createContext(
+    new URL("https://example.com"),
+    undefined,
+  );
+  const actor = await context.getActor("alice");
+  assertEquals(dispatchedIdentifier, "alice");
+  assertEquals(actor?.id?.href, "https://example.com/users/alice");
+  assertEquals(await context.getActorKeyPairs("alice"), []);
+  assertEquals(keyPairsCalled, true);
+});
+
+test("MockFederation chained object setter keeps the dispatcher usable", async () => {
+  const federation = createFederation<void>();
+  federation
+    .setObjectDispatcher(Note, "/notes/{id}", (ctx, values) => {
+      return new Note({ id: ctx.getObjectUri(Note, values) });
+    })
+    .authorize(() => true);
+
+  const context = federation.createContext(
+    new URL("https://example.com"),
+    undefined,
+  );
+  const note = await context.getObject(Note, { id: "1" });
+  assertEquals(note?.id?.href, "https://example.com/notes/1");
 });
 
 test("MockContext.getActorKeyPairs() returns empty array when no dispatcher registered", async () => {
