@@ -637,6 +637,13 @@ To be released.
     `temporal-polyfill`, while type declarations rely on the standard
     `esnext.temporal` lib reference.
     [[#823], [#925]]
+ -  Fixed the setters that `createFederation()` returns from
+    `setActorDispatcher()`, `setObjectDispatcher()`, and the collection
+    dispatchers so that every method returns the setters object; chaining them
+    now works as it does with the real `Federation`.  The actor setters also
+    gained `mapActorAlias()`.  [[#1098]]
+
+[#1098]: https://github.com/fedify-dev/fedify/issues/1098
 
 ### @fedify/vocab
 
